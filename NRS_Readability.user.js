@@ -82,19 +82,63 @@ try {
   let root = document.querySelector(".WordSection1");
   root.remove();
 
-  let parent = document.createElement( 'div' );
+  let fragment = document.createDocumentFragment();
+  let chapter = null;
   let section = null;
   let numbers = null;
   let letters = null;
   let subnumbers = null;
-  let container = parent;
+  let container = fragment;
 
   while (root.childNodes.length > 0) {
-    let part = root.childNodes[ 0 ];
+    let part = root.firstChild;
     part.remove();
-    if (!( part instanceof Element )) continue;
 
-    if (part.classList.contains( 'SectBody' )) {
+    if (!( part instanceof Element )) {
+      container.appendChild( part );
+      continue;
+    }
+
+    if (part.classList.contains( 'Chapter' )) {
+      section = null;
+      numbers = null;
+      letters = null;
+      subnumbers = null;
+
+      chapter = document.createElement( 'section' );
+      chapter.className = 'chapter';
+      fragment.appendChild( chapter );
+
+      let anchor = part.querySelector( 'a[name]' );
+      if (anchor) {
+        anchor.remove();
+        chapter.id = anchor.name;
+      }
+
+      let header = document.createElement( 'header' );
+      chapter.appendChild( header );
+
+      let heading = document.createElement( 'h1' );
+      moveChildren( part, heading );
+      header.appendChild( heading );
+
+      container = document.createElement( 'nav' );
+      header.appendChild( container );
+
+      let tochead = document.createElement( 'h2' );
+      tochead.textContent = 'Table of Contents'
+      container.appendChild( tochead );
+    } else if (chapter && part.classList.contains( 'COLeadline' )) {
+      let entry = document.createElement( 'div' );
+      moveChildren( part, entry );
+      container.appendChild( entry );
+    } else if (chapter && part.classList.contains( 'COHead2' )) {
+      let heading = document.createElement( 'h3' );
+      moveChildren( part, heading );
+      container.appendChild( heading );
+    } else if (chapter && part.classList.contains( 'J-Dash' )) {
+      // ignore; we replace this with CSS
+    } else if (chapter && part.classList.contains( 'SectBody' )) {
       // p.SectBody is nearly all content
 
 
@@ -106,7 +150,8 @@ try {
         subnumbers = null;
 
         section = document.createElement( 'section' );
-        parent.appendChild( section );
+        section.className = 'section';
+        chapter.appendChild( section );
         container = section;
 
         let heading = document.createElement( 'h3' );
@@ -216,26 +261,28 @@ try {
         container.appendChild( part );
       }
     } else if (part.classList.contains( 'SourceNote' ) && section) {
-      section.appendChild( part );
-    } else if (part.classList.contains( 'DocHeading' ) || part.classList.contains( 'COHead2' )) {
-      let heading = document.createElement( 'h2' );
-      moveChildren( part, heading );
-
-      let anchor = heading.querySelector( 'a[name]' );
-      if (anchor) {
-        anchor.remove();
-        heading.id = anchor.name;
-      }
-
-      parent.appendChild( heading );
-    } else {
+      let footer = document.createElement( 'footer' );
+      moveChildren( part, footer );
+      section.appendChild( footer );
+    } else if (part.classList.contains( 'DocHeading' )) {
       section = null;
       numbers = null;
       letters = null;
       subnumbers = null;
-      container = parent;
+      container = chapter || fragment;
 
-      parent.appendChild( part );
+      let heading = document.createElement( 'h2' );
+      moveChildren( part, heading );
+      container.appendChild( heading );
+    } else {
+      chapter = null;
+      section = null;
+      numbers = null;
+      letters = null;
+      subnumbers = null;
+      container = fragment;
+
+      fragment.appendChild( part );
     }
   }
 
@@ -248,7 +295,7 @@ try {
   // almost always be too deep in the hierarchy. Here we move it to
   // the same level of hierarchy as the *following* list item, which
   // seems to be a good heuristic.
-  for (let arrow of parent.querySelectorAll( '.arrow-then' )) {
+  for (let arrow of fragment.querySelectorAll( '.arrow-then' )) {
     let paragraph = arrow.parentElement;
     if ('P' !== paragraph.tagName) {
       console.warn( 'NRS Readability found arrow outside paragraph' );
@@ -287,11 +334,28 @@ try {
 
     let style = document.createElement( 'style' );
     style.type = "text/css";
-    style.textContent = "p { max-width: 78ex; }";
+    style.textContent = (
+      'p, h3 { max-width: 78ex; }'
+      + '.chapter > header > nav {'
+      +   'font-size: 80%;'
+      +   'background: #EEE;'
+      +   'padding: 1ex;'
+      + '}'
+      + '.chapter > header > nav > h2 {'
+      +   'margin-top: 0;'
+      + '}'
+      + '.section > footer {'
+      +   'font-size: 50%;'
+      +   'color: #888;'
+      + '}'
+      + '.section > footer a         { color: #77F; }'
+      + '.section > footer a:active  { color: #F77; }'
+      + '.section > footer a:visited { color: #97C; }'
+    );
     document.head.appendChild( style );
   })();
 
-  document.body.appendChild( parent );
+  document.body.appendChild( fragment );
   console.info( "NRS Readability finished" );
 })();
 } catch (caught) {
