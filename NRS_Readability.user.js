@@ -31,6 +31,20 @@ try {
   }
 
   function visitElement (elem) {
+    // The page uses Wingdings to render an arrow. Not everyone has
+    // Wingdings and that arrow is in Unicode now, so replace it with
+    // the Unicode version in a span with an identifying class.
+    if ('SPAN' === elem.tagName
+        && '"Wingdings 3"' === elem.style.fontFamily
+        && elem.childNodes.length === 1
+        && elem.firstChild instanceof Text
+        && '\u00CA' == elem.firstChild.data.trim()) {
+      let span = document.createElement( 'span' );
+      span.className = 'arrow-then';
+      span.textContent = '\u2BA9';
+      return span;
+    }
+
     filterChildren( elem );
     return elem;
   }
@@ -57,7 +71,7 @@ try {
     let text = node.childNodes[ 0 ];
     if (!(text instanceof CharacterData)) return;
 
-    let value = normSpace( text.textContent ).trimLeft();
+    let value = normSpace( text.data ).trimLeft();
     if (value.startsWith( prefix )) {
       node.replaceChild( document.createTextNode(
         value.substring( prefix.length ).trimLeft()
@@ -223,6 +237,45 @@ try {
 
       parent.appendChild( part );
     }
+  }
+
+
+  // The pages often use an arrow to mean "then" at the end of a list
+  // of conditions. In `visitElement` we clean up the way they render
+  // the arrow and give it an identifying class so we can find it here.
+  // The structure-building algorithm will make the paragraph with the
+  // arrow part of the list item that immediately precedes it, so it'll
+  // almost always be too deep in the hierarchy. Here we move it to
+  // the same level of hierarchy as the *following* list item, which
+  // seems to be a good heuristic.
+  for (let arrow of parent.querySelectorAll( '.arrow-then' )) {
+    let paragraph = arrow.parentElement;
+    if ('P' !== paragraph.tagName) {
+      console.warn( 'NRS Readability found arrow outside paragraph' );
+      continue;
+    }
+
+    let child = paragraph;
+    let parent = child.parentElement;
+    up: while ('LI' === parent.tagName) {
+      let sibling = parent.nextSibling;
+      right: while (sibling) {
+        // if the containing LI has an LI as a following sibling we've
+        // found the level of hierarchy at which the arrow should land
+        if ('LI' === sibling.tagName) {
+          break up;
+        }
+
+        sibling = sibling.nextSibling;
+      }
+
+      // if there was no LI in the following siblings,
+      // jump up to our LI's parent OL and try again
+      child = parent.parentElement;
+      parent = child.parentElement;
+    }
+
+    parent.insertBefore( paragraph, child.nextSibling );
   }
 
 
